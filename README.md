@@ -99,12 +99,8 @@ import DecisaSDK
 @main
 struct MyApp: App {
     init() {
-        Task {
-            // First launch: reads the AdServices token, POSTs /v1/resolve,
-            // and persists the visitor id + UTM attribution. Subsequent
-            // launches reuse the persisted visitor id (no re-resolve).
-            await Decisa.initialize(pixelKey: "dcs_px_your_public_key")
-        }
+        // Synchronous kickoff so paywall / first-screen events can await resolve.
+        Decisa.start(pixelKey: "dcs_px_your_public_key")
     }
 
     var body: some Scene {

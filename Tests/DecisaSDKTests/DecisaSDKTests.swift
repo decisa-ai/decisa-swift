@@ -9,14 +9,17 @@ import XCTest
 // MARK: - Mocks
 
 final class MockTransport: DecisaTransporting, @unchecked Sendable {
-    var handler: ((String, [String: Any]) -> DecisaResponse)?
+    var handler: ((String, [String: Any]) async -> DecisaResponse)?
     private(set) var sentBodies: [[String: Any]] = []
     private(set) var sentPaths: [String] = []
 
     func post(path: String, body: [String: Any]) async -> DecisaResponse {
         sentPaths.append(path)
         sentBodies.append(body)
-        return handler?(path, body) ?? .networkFailure
+        if let handler {
+            return await handler(path, body)
+        }
+        return .networkFailure
     }
 }
 
@@ -267,5 +270,48 @@ final class DecisaSDKTests: XCTestCase {
         )
 
         XCTAssertEqual(resolveCallCount, 1)
+    }
+
+    func testTrackBeforeInitializeCompletesWaitsForResolve() async {
+        let transport = MockTransport()
+        var trackBodies: [[String: Any]] = []
+
+        transport.handler = { path, body in
+            if path == "/v1/resolve" {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                return DecisaResponse(
+                    statusCode: 200,
+                    data: ["visitor_id": "v_1", "matched": false],
+                    error: nil
+                )
+            }
+            if path == "/v1/track" {
+                trackBodies.append(body)
+                return DecisaResponse(statusCode: 202, data: nil, error: nil)
+            }
+            return .networkFailure
+        }
+
+        Decisa.startForTesting(
+            pixelKey: "dcs_px_abc",
+            baseURL: URL(string: "https://api.decisa.ai")!,
+            transport: transport,
+            persistence: MockPersistence(),
+            signalReader: MockSignalReader(signal: .empty)
+        )
+
+        let trackResult = await Decisa.track(DecisaEvent.custom("paywall_viewed"))
+        await Decisa.waitForInitializationForTesting()
+
+        XCTAssertTrue(trackResult)
+        XCTAssertEqual(trackBodies.count, 1)
+        XCTAssertEqual(trackBodies.first?["event_name"] as? String, "Custom")
+        let metadata = trackBodies.first?["metadata"] as? [String: Any]
+        XCTAssertEqual(metadata?["custom_event_name"] as? String, "paywall_viewed")
+    }
+
+    func testTrackWithoutInitializeReturnsFalse() async {
+        let ok = await Decisa.track(DecisaEvent.lead())
+        XCTAssertFalse(ok)
     }
 }

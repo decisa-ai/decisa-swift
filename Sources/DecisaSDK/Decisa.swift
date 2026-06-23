@@ -15,6 +15,7 @@ import Foundation
 @MainActor
 public enum Decisa {
     private static var instance: DecisaClient?
+    private static var initializationTask: Task<Void, Never>?
 
     private static let pixelKeyPrefix = "dcs_px_"
 
@@ -37,25 +38,50 @@ public enum Decisa {
             return
         }
 
-        let resolvedBaseURL = baseURL ?? URL(string: "https://api.decisa.ai")!
+        if initializationTask == nil {
+            beginInitialization(pixelKey: pixelKey, baseURL: baseURL)
+        }
 
-        assert(
-            pixelKey.hasPrefix(pixelKeyPrefix),
-            "Decisa: pixelKey must be a public pixel key (starts with \"\(pixelKeyPrefix)\"). " +
-                "Never ship a secret dcs_ak_ / dcs_sk_ key in a mobile binary."
-        )
+        await initializationTask?.value
+    }
 
-        let client = DecisaClient(
-            pixelKey: pixelKey,
-            transport: DecisaTransport(baseURL: resolvedBaseURL),
-            persistence: DecisaPersistence(),
-            signalReader: DeferredSignalReader()
-        )
+    /// Starts SDK initialization without awaiting completion.
+    ///
+    /// Call synchronously from `App.init` before any UI that may emit events
+    /// (for example a first-run paywall). Prefer this over wrapping
+    /// [initialize] in an unstructured `Task` so [track] can wait for resolve.
+    public static func start(pixelKey: String, baseURL: URL? = nil) {
+        if instance != nil || initializationTask != nil {
+            return
+        }
+        beginInitialization(pixelKey: pixelKey, baseURL: baseURL)
+    }
 
-        await client.resolveOrRestore()
+    private static func beginInitialization(
+        pixelKey: String,
+        baseURL: URL?
+    ) {
+        initializationTask = Task { @MainActor in
+            let resolvedBaseURL = baseURL ?? URL(string: "https://api.decisa.ai")!
 
-        if instance == nil {
-            instance = client
+            assert(
+                pixelKey.hasPrefix(pixelKeyPrefix),
+                "Decisa: pixelKey must be a public pixel key (starts with \"\(pixelKeyPrefix)\"). " +
+                    "Never ship a secret dcs_ak_ / dcs_sk_ key in a mobile binary."
+            )
+
+            let client = DecisaClient(
+                pixelKey: pixelKey,
+                transport: DecisaTransport(baseURL: resolvedBaseURL),
+                persistence: DecisaPersistence(),
+                signalReader: DeferredSignalReader()
+            )
+
+            await client.resolveOrRestore()
+
+            if instance == nil {
+                instance = client
+            }
         }
     }
 
@@ -67,8 +93,8 @@ public enum Decisa {
         firstName: String? = nil,
         lastName: String? = nil
     ) async -> Bool {
+        await awaitInitialization()
         guard let client = instance else {
-            assertionFailure("Decisa.identify called before Decisa.initialize.")
             return false
         }
         return await client.identify(
@@ -82,11 +108,28 @@ public enum Decisa {
 
     /// Records an in-app [event] via `POST /v1/track`.
     public static func track(_ event: DecisaEvent) async -> Bool {
-        guard let client = instance else {
-            assertionFailure("Decisa.track called before Decisa.initialize.")
-            return false
+        if let client = instance {
+            return await client.track(event)
         }
-        return await client.track(event)
+
+        if let initializationTask {
+            await initializationTask.value
+            guard let client = instance else {
+                return false
+            }
+            return await client.track(event)
+        }
+
+        return false
+    }
+
+    private static func awaitInitialization() async {
+        if instance != nil {
+            return
+        }
+        if let initializationTask {
+            await initializationTask.value
+        }
     }
 
     // MARK: - Testing seams
@@ -104,21 +147,68 @@ public enum Decisa {
             return
         }
 
-        let client = DecisaClient(
+        if initializationTask == nil {
+            beginInitializationForTesting(
+                pixelKey: pixelKey,
+                baseURL: baseURL,
+                transport: transport,
+                persistence: persistence,
+                signalReader: signalReader
+            )
+        }
+
+        await initializationTask?.value
+    }
+
+    static func startForTesting(
+        pixelKey: String,
+        baseURL: URL,
+        transport: DecisaTransporting,
+        persistence: DecisaPersisting,
+        signalReader: DeferredSignalReading
+    ) {
+        if instance != nil || initializationTask != nil {
+            return
+        }
+        beginInitializationForTesting(
             pixelKey: pixelKey,
+            baseURL: baseURL,
             transport: transport,
             persistence: persistence,
             signalReader: signalReader
         )
-        await client.resolveOrRestore()
+    }
 
-        if instance == nil {
-            instance = client
+    static func waitForInitializationForTesting() async {
+        await initializationTask?.value
+    }
+
+    private static func beginInitializationForTesting(
+        pixelKey: String,
+        baseURL: URL,
+        transport: DecisaTransporting,
+        persistence: DecisaPersisting,
+        signalReader: DeferredSignalReading
+    ) {
+        initializationTask = Task { @MainActor in
+            let client = DecisaClient(
+                pixelKey: pixelKey,
+                transport: transport,
+                persistence: persistence,
+                signalReader: signalReader
+            )
+            await client.resolveOrRestore()
+
+            if instance == nil {
+                instance = client
+            }
         }
     }
 
     /// Resets the singleton. Test-only.
     static func resetForTesting() {
+        initializationTask?.cancel()
+        initializationTask = nil
         instance = nil
     }
     #endif
@@ -190,7 +280,6 @@ final class DecisaClient: @unchecked Sendable {
         lastName: String?
     ) async -> Bool {
         guard let visitorId = attribution?.visitorId else {
-            assertionFailure("Decisa.identify called before initialize completed.")
             return false
         }
 
@@ -215,7 +304,6 @@ final class DecisaClient: @unchecked Sendable {
             || (externalId?.isEmpty == false)
 
         if !hasIdentity {
-            assertionFailure("Decisa.identify needs at least one of userId/email/phone/name.")
             return false
         }
 
@@ -235,7 +323,6 @@ final class DecisaClient: @unchecked Sendable {
 
     func track(_ event: DecisaEvent) async -> Bool {
         guard let attribution else {
-            assertionFailure("Decisa.track called before initialize completed.")
             return false
         }
 

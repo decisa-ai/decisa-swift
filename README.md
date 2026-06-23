@@ -1,14 +1,48 @@
-# DecisaSDK — Decisa mobile attribution SDK for iOS (Swift)
+# DecisaSDK — iOS attribution SDK for Swift (Swift Package Manager)
 
-A first-party mobile attribution SDK that connects an **ad click → app install →
-in-app conversions**, reusing Decisa's existing public attribution ingest. It is
-a "native pixel": it authenticates with your **public** `pixel_key`, reads the
-platform's deferred-attribution signal on first launch, and then posts
-identify/track events to the same endpoints `pixel.js` uses in the browser.
+**DecisaSDK** is a native **iOS attribution SDK** distributed via **Swift Package
+Manager (SPM)**. It connects **paid ads → App Store install → in-app conversions**
+using Decisa's first-party attribution ingest — the same public endpoints as
+`pixel.js` in the browser.
 
-- **iOS** is probabilistic: there is no Play Install Referrer, so the install is
-  matched server-side by IP + timestamp; the AdServices token enriches Apple Search
-  Ads campaigns only.
+Ship a **native pixel** in your Swift or SwiftUI app: authenticate with your
+public `pixel_key` (`dcs_px_`), resolve deferred attribution on first launch,
+then send **conversion tracking** events to `/v1/identify` and `/v1/track`.
+Built for **web2app** and **funnel2app** flows where users click an ad or
+landing page, install from the App Store, and convert days later — without
+ATT prompts or IDFA in v1.
+
+| | **decisa-swift** (this repo) | [decisa-flutter](https://github.com/decisa-ai/decisa-flutter) |
+| --- | --- | --- |
+| Platform | Native iOS (Swift) | Flutter (iOS + Android) |
+| Install match | Probabilistic (IP + timestamp) + AdServices token for Apple Search Ads | Android: deterministic Play Install Referrer; iOS: same probabilistic model |
+| Package manager | Swift Package Manager | pub.dev |
+| Best for | SwiftUI/UIKit apps, iOS-only stacks | Cross-platform mobile apps |
+
+---
+
+## Use cases: web2app & funnel2app
+
+**Web2app** — A user clicks a Meta, Google, or TikTok ad that lands on a Decisa
+UTM link, gets redirected to the App Store, installs, and opens the app. On first
+launch, `Decisa.initialize` calls `/v1/resolve` to bind the install back to the
+original click and its `utm_*` parameters.
+
+**Funnel2app** — A multi-step funnel (quiz, lead form, checkout page) lives on
+the web; the final step sends users to the store via `?app=1`. In-app events
+(`Lead`, `CompleteRegistration`, `Purchase`) carry the install attribution
+forward so you can measure **funnel-to-app** conversion, not just installs.
+
+**Paid ads without ATT** — v1 does not prompt for App Tracking Transparency or
+read IDFA. Installs are matched server-side; the AdServices token enriches
+**Apple Search Ads** campaigns. For SKAdNetwork-style aggregate reporting, pair
+this SDK with your MMP or platform conversion APIs — DecisaSDK focuses on
+first-party, event-level attribution you own.
+
+**CAPI & server-side fanout** — Events ingested via `/v1/track` flow through
+Decisa's existing conversion pipeline (same taxonomy as the web pixel), enabling
+**CAPI**-style server-side delivery to ad platforms without embedding secret keys
+in the app binary.
 
 ---
 
@@ -27,7 +61,7 @@ not a `dcs_px_` key (an assertion fires in debug builds).
 
 ---
 
-## Install
+## Install (Swift Package Manager)
 
 Add the package via Swift Package Manager in Xcode (**File → Add Package
 Dependencies**) using the repository URL, or in your `Package.swift`:
@@ -116,15 +150,22 @@ server-side and never double-count.
 
 ---
 
-## Deferred deep links (how the install gets attributed)
+## Deferred deep linking & install attribution
+
+The hard part of **mobile ad attribution** is connecting *"who clicked the ad"*
+to *"who opened the app after installing"* across a multi-day gap with no shared
+cookie. Decisa solves this with a server-minted click and the iOS deferred signal:
 
 1. **Mint the click.** Point your ad at a Decisa UTM short link in `?app=1`
-   mode: `https://api.decisa.ai/k/<slug>?app=1`.
+   mode: `https://api.decisa.ai/k/<slug>?app=1`. The backend mints a click
+   (carrying UTM attribution, a hashed IP, and a timestamp) and redirects to
+   the App Store.
 2. **Configure store URLs.** On the UTM link's metadata set `ios_store_url`
    so the `?app=1` redirect sends iOS users to the correct App Store listing.
-3. **Resolve on first launch.** `Decisa.initialize` reads the AdServices token
-   and POSTs `/v1/resolve`. The backend matches **probabilistically** by IP +
-   timestamp; the AdServices token enriches Apple Search Ads campaigns.
+3. **Resolve on first launch.** `Decisa.initialize` reads the **AdServices
+   attribution token** and POSTs `/v1/resolve`. The backend matches
+   **probabilistically** by IP + timestamp; the token enriches **Apple Search
+   Ads** campaigns only.
 4. **Bind and track.** `/v1/resolve` returns a `visitor_id` bound to the click.
    The SDK persists it for every later `identify` / `track`.
 
@@ -134,6 +175,22 @@ SDK mints a local fallback `visitor_id` (`v_…`) so tracking still works.
 > The SDK does **not** prompt for App Tracking Transparency (ATT) or read the
 > IDFA in v1. `madid` is attached to event metadata only if already available
 > without a prompt.
+
+---
+
+## Decisa ecosystem & MCP
+
+Decisa is more than a mobile SDK. The **[Decisa MCP](https://github.com/decisa-ai)**
+(Model Context Protocol) server exposes campaign and attribution operations to AI
+agents and automation tools — launch UTM links, inspect match rates, manage
+conversion events — while this SDK handles the **in-app** side of the same
+pipeline.
+
+Typical stack:
+
+- **Web / funnel** — `pixel.js` on landing pages and checkout flows
+- **Mobile** — **DecisaSDK** (Swift) or [decisa-flutter](https://github.com/decisa-ai/decisa-flutter) for cross-platform
+- **Ops & agents** — Decisa MCP tools for campaign setup and attribution QA
 
 ---
 
@@ -165,6 +222,43 @@ Tests/DecisaSDKTests/
 
 ---
 
+## FAQ
+
+**How is this different from an MMP (Adjust, AppsFlyer, Branch)?**
+DecisaSDK is a lightweight, first-party **native pixel** tied to Decisa's
+attribution ingest — not a full MMP. It excels at **web2app** / **funnel2app**
+flows where you already use Decisa UTM links and want the same visitor model
+across web and iOS without a third-party SDK tax.
+
+**Do I need ATT or IDFA?**
+No in v1. Matching is probabilistic (IP + timestamp) plus AdServices for Apple
+Search Ads. No ATT prompt is shown.
+
+**SwiftUI or UIKit?**
+Both. Import `DecisaSDK` and call `Decisa.initialize` from your `@main` App
+init or `AppDelegate`.
+
+**Cross-platform app?**
+Use [decisa-flutter](https://github.com/decisa-ai/decisa-flutter) for shared
+Dart code on iOS and Android. Use **decisa-swift** when you want a native Swift
+dependency with no Flutter bridge.
+
+**Where do conversions go after `/v1/track`?**
+Through Decisa's server-side pipeline — same event taxonomy as the web pixel —
+including **CAPI** fanout to ad platforms configured in your Decisa workspace.
+
+---
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+---
+
+## GitHub repository topics
+
+Suggested topics for [github.com/decisa-ai/decisa-swift](https://github.com/decisa-ai/decisa-swift) → **Settings → General → Topics**:
+
+`ios` · `swift` · `swift-package-manager` · `spm` · `mobile-attribution` · `attribution` · `ad-attribution` · `mobile-ads` · `conversion-tracking` · `web2app` · `funnel2app` · `deferred-deep-linking` · `apple-search-ads` · `adservices` · `capi` · `mcp` · `first-party-data` · `sdk`
+
+See [docs/discoverability.md](docs/discoverability.md) for the recommended **About** description and full discoverability checklist.

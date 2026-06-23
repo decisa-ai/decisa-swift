@@ -1,4 +1,6 @@
 // swift-tools-version: 5.9
+// DecisaSDK — native iOS attribution SDK (Swift Package Manager) for web2app,
+// funnel2app, and paid-ads conversion tracking via Decisa's public pixel ingest.
 import PackageDescription
 
 let package = Package(

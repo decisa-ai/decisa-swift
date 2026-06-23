@@ -253,12 +253,3 @@ including **CAPI** fanout to ad platforms configured in your Decisa workspace.
 
 MIT. See [LICENSE](LICENSE).
 
----
-
-## GitHub repository topics
-
-Suggested topics for [github.com/decisa-ai/decisa-swift](https://github.com/decisa-ai/decisa-swift) → **Settings → General → Topics**:
-
-`ios` · `swift` · `swift-package-manager` · `spm` · `mobile-attribution` · `attribution` · `ad-attribution` · `mobile-ads` · `conversion-tracking` · `web2app` · `funnel2app` · `deferred-deep-linking` · `apple-search-ads` · `adservices` · `capi` · `mcp` · `first-party-data` · `sdk`
-
-See [docs/discoverability.md](docs/discoverability.md) for the recommended **About** description and full discoverability checklist.

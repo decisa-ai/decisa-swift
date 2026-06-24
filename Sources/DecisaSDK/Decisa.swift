@@ -6,18 +6,19 @@ import Foundation
 ///
 /// Usage:
 /// ```swift
-/// await Decisa.initialize(pixelKey: "dcs_px_...")
+/// Decisa.start(appKey: "dcs_app_...")
 /// await Decisa.track(DecisaEvent.purchase(value: 49.90, currency: "USD"))
 /// ```
 ///
-/// The SDK authenticates with the PUBLIC `pixel_key` (`dcs_px_...`) only — never
+/// The SDK authenticates with the PUBLIC `app_key` (`dcs_app_...`) only — never
 /// a secret `dcs_ak_` / `dcs_sk_` key, which must never ship in a mobile binary.
+/// Pixel membership is configured server-side in the Decisa dashboard.
 @MainActor
 public enum Decisa {
     private static var instance: DecisaClient?
     private static var initializationTask: Task<Void, Never>?
 
-    private static let pixelKeyPrefix = "dcs_px_"
+    private static let appKeyPrefix = "dcs_app_"
 
     /// The resolved attribution for this install, available after [initialize].
     public static var attribution: DecisaAttribution? {
@@ -31,7 +32,7 @@ public enum Decisa {
 
     /// Initializes the SDK. Idempotent within a process.
     public static func initialize(
-        pixelKey: String,
+        appKey: String,
         baseURL: URL? = nil
     ) async {
         if instance != nil {
@@ -39,7 +40,7 @@ public enum Decisa {
         }
 
         if initializationTask == nil {
-            beginInitialization(pixelKey: pixelKey, baseURL: baseURL)
+            beginInitialization(appKey: appKey, baseURL: baseURL)
         }
 
         await initializationTask?.value
@@ -50,28 +51,28 @@ public enum Decisa {
     /// Call synchronously from `App.init` before any UI that may emit events
     /// (for example a first-run paywall). Prefer this over wrapping
     /// [initialize] in an unstructured `Task` so [track] can wait for resolve.
-    public static func start(pixelKey: String, baseURL: URL? = nil) {
+    public static func start(appKey: String, baseURL: URL? = nil) {
         if instance != nil || initializationTask != nil {
             return
         }
-        beginInitialization(pixelKey: pixelKey, baseURL: baseURL)
+        beginInitialization(appKey: appKey, baseURL: baseURL)
     }
 
     private static func beginInitialization(
-        pixelKey: String,
+        appKey: String,
         baseURL: URL?
     ) {
         initializationTask = Task { @MainActor in
             let resolvedBaseURL = baseURL ?? URL(string: "https://api.decisa.ai")!
 
             assert(
-                pixelKey.hasPrefix(pixelKeyPrefix),
-                "Decisa: pixelKey must be a public pixel key (starts with \"\(pixelKeyPrefix)\"). " +
+                appKey.hasPrefix(appKeyPrefix),
+                "Decisa: appKey must be a public app key (starts with \"\(appKeyPrefix)\"). " +
                     "Never ship a secret dcs_ak_ / dcs_sk_ key in a mobile binary."
             )
 
             let client = DecisaClient(
-                pixelKey: pixelKey,
+                appKey: appKey,
                 transport: DecisaTransport(baseURL: resolvedBaseURL),
                 persistence: DecisaPersistence(),
                 signalReader: DeferredSignalReader()
@@ -137,7 +138,7 @@ public enum Decisa {
     #if DEBUG
     /// Injectable initializer for unit tests.
     static func initializeForTesting(
-        pixelKey: String,
+        appKey: String,
         baseURL: URL,
         transport: DecisaTransporting,
         persistence: DecisaPersisting,
@@ -149,7 +150,7 @@ public enum Decisa {
 
         if initializationTask == nil {
             beginInitializationForTesting(
-                pixelKey: pixelKey,
+                appKey: appKey,
                 baseURL: baseURL,
                 transport: transport,
                 persistence: persistence,
@@ -161,7 +162,7 @@ public enum Decisa {
     }
 
     static func startForTesting(
-        pixelKey: String,
+        appKey: String,
         baseURL: URL,
         transport: DecisaTransporting,
         persistence: DecisaPersisting,
@@ -171,7 +172,7 @@ public enum Decisa {
             return
         }
         beginInitializationForTesting(
-            pixelKey: pixelKey,
+            appKey: appKey,
             baseURL: baseURL,
             transport: transport,
             persistence: persistence,
@@ -184,7 +185,7 @@ public enum Decisa {
     }
 
     private static func beginInitializationForTesting(
-        pixelKey: String,
+        appKey: String,
         baseURL: URL,
         transport: DecisaTransporting,
         persistence: DecisaPersisting,
@@ -192,7 +193,7 @@ public enum Decisa {
     ) {
         initializationTask = Task { @MainActor in
             let client = DecisaClient(
-                pixelKey: pixelKey,
+                appKey: appKey,
                 transport: transport,
                 persistence: persistence,
                 signalReader: signalReader
@@ -217,7 +218,7 @@ public enum Decisa {
 // MARK: - DecisaClient
 
 final class DecisaClient: @unchecked Sendable {
-    let pixelKey: String
+    let appKey: String
     private let transport: DecisaTransporting
     private let persistence: DecisaPersisting
     private let signalReader: DeferredSignalReading
@@ -226,12 +227,12 @@ final class DecisaClient: @unchecked Sendable {
     private var madid: String?
 
     init(
-        pixelKey: String,
+        appKey: String,
         transport: DecisaTransporting,
         persistence: DecisaPersisting,
         signalReader: DeferredSignalReading
     ) {
-        self.pixelKey = pixelKey
+        self.appKey = appKey
         self.transport = transport
         self.persistence = persistence
         self.signalReader = signalReader
@@ -256,7 +257,7 @@ final class DecisaClient: @unchecked Sendable {
     func resolve(signal: DeferredSignal) async -> DecisaAttribution {
         let fallbackVisitorId = generateFallbackVisitorId()
 
-        var body: [String: Any] = ["pixel_key": pixelKey]
+        var body: [String: Any] = ["app_key": appKey]
         if let mclid = signal.mclid { body["mclid"] = mclid }
         if let token = signal.adservicesToken { body["adservices_token"] = token }
 
@@ -308,7 +309,7 @@ final class DecisaClient: @unchecked Sendable {
         }
 
         var body: [String: Any] = [
-            "pixel_key": pixelKey,
+            "app_key": appKey,
             "visitor_id": visitorId,
         ]
         if let emailHash { body["email_sha256"] = emailHash }
@@ -334,7 +335,7 @@ final class DecisaClient: @unchecked Sendable {
 
         let body = event.toTrackBody(
             visitorId: attribution.visitorId,
-            pixelKey: pixelKey,
+            appKey: appKey,
             extraMetadata: extraMetadata
         )
 

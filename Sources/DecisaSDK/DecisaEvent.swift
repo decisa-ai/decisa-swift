@@ -281,7 +281,7 @@ public struct DecisaEvent {
     /// Builds the JSON body for `POST /v1/track`.
     func toTrackBody(
         visitorId: String,
-        pixelKey: String,
+        appKey: String,
         extraMetadata: [String: Any] = [:]
     ) -> [String: Any] {
         var mergedMetadata = extraMetadata
@@ -296,7 +296,7 @@ public struct DecisaEvent {
             "event_id": eventId,
             "event_name": name.wireName,
             "visitor_id": visitorId,
-            "pixel_key": pixelKey,
+            "app_key": appKey,
             "is_test": isTest,
             "metadata": mergedMetadata,
         ]

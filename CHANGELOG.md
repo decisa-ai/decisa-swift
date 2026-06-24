@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+### Breaking
+
+- Mobile SDKs now authenticate with **`app_key`** (`dcs_app_…`) instead of
+  `pixel_key` (`dcs_px_…`). Create an app in the Decisa dashboard and embed its
+  `app_key` in the binary. Pixel membership is server-side — no rebuild when
+  pixels change.
+- Public API renamed: `pixelKey` → `appKey`; request bodies use `app_key`.
+
+### Added
+
+- `Decisa.start(appKey:)` — synchronous kickoff from `App.init`.
+
 ## 0.1.1
 
 ### Fixed
@@ -10,7 +24,7 @@
 
 ### Added
 
-- `Decisa.start(pixelKey:)` — synchronous kickoff from `App.init` so early events
+- `Decisa.start(appKey:)` — synchronous kickoff from `App.init` so early events
   can await resolve without wrapping `initialize` in an unstructured `Task`.
 
 ## 0.1.0

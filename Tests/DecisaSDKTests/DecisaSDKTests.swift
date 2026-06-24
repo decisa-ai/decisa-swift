@@ -90,7 +90,7 @@ final class DecisaSDKTests: XCTestCase {
         let persistence = MockPersistence()
 
         await Decisa.initializeForTesting(
-            pixelKey: "dcs_px_abc",
+            appKey: "dcs_app_abc",
             baseURL: URL(string: "https://api.decisa.ai")!,
             transport: transport,
             persistence: persistence,
@@ -109,7 +109,7 @@ final class DecisaSDKTests: XCTestCase {
         XCTAssertEqual(Decisa.attribution?.matched, true)
         XCTAssertEqual(Decisa.attribution?.utmCampaign, "spring_sale")
         XCTAssertEqual(transport.sentBodies.first?["adservices_token"] as? String, "tok_abc")
-        XCTAssertEqual(transport.sentBodies.first?["pixel_key"] as? String, "dcs_px_abc")
+        XCTAssertEqual(transport.sentBodies.first?["app_key"] as? String, "dcs_app_abc")
         XCTAssertTrue(persistence.hasResolved())
     }
 
@@ -120,7 +120,7 @@ final class DecisaSDKTests: XCTestCase {
         }
 
         await Decisa.initializeForTesting(
-            pixelKey: "dcs_px_abc",
+            appKey: "dcs_app_abc",
             baseURL: URL(string: "https://api.decisa.ai")!,
             transport: transport,
             persistence: MockPersistence(),
@@ -148,7 +148,7 @@ final class DecisaSDKTests: XCTestCase {
         }
 
         await Decisa.initializeForTesting(
-            pixelKey: "dcs_px_abc",
+            appKey: "dcs_app_abc",
             baseURL: URL(string: "https://api.decisa.ai")!,
             transport: transport,
             persistence: MockPersistence(),
@@ -195,7 +195,7 @@ final class DecisaSDKTests: XCTestCase {
         }
 
         await Decisa.initializeForTesting(
-            pixelKey: "dcs_px_abc",
+            appKey: "dcs_app_abc",
             baseURL: URL(string: "https://api.decisa.ai")!,
             transport: transport,
             persistence: MockPersistence(),
@@ -227,7 +227,7 @@ final class DecisaSDKTests: XCTestCase {
 
     func testCustomEventMapsToCustomWithLabelInMetadata() {
         let event = DecisaEvent.custom("viewed_pricing")
-        let body = event.toTrackBody(visitorId: "v_1", pixelKey: "dcs_px_abc")
+        let body = event.toTrackBody(visitorId: "v_1", appKey: "dcs_app_abc")
 
         XCTAssertEqual(body["event_name"] as? String, "Custom")
         let metadata = body["metadata"] as? [String: Any]
@@ -254,7 +254,7 @@ final class DecisaSDKTests: XCTestCase {
         let signalReader = MockSignalReader(signal: .empty)
 
         await Decisa.initializeForTesting(
-            pixelKey: "dcs_px_abc",
+            appKey: "dcs_app_abc",
             baseURL: URL(string: "https://api.decisa.ai")!,
             transport: transport,
             persistence: persistence,
@@ -262,7 +262,7 @@ final class DecisaSDKTests: XCTestCase {
         )
 
         await Decisa.initializeForTesting(
-            pixelKey: "dcs_px_abc",
+            appKey: "dcs_app_abc",
             baseURL: URL(string: "https://api.decisa.ai")!,
             transport: transport,
             persistence: persistence,
@@ -293,7 +293,7 @@ final class DecisaSDKTests: XCTestCase {
         }
 
         Decisa.startForTesting(
-            pixelKey: "dcs_px_abc",
+            appKey: "dcs_app_abc",
             baseURL: URL(string: "https://api.decisa.ai")!,
             transport: transport,
             persistence: MockPersistence(),

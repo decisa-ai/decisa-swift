@@ -2,11 +2,11 @@
 
 **DecisaSDK** is a native **iOS attribution SDK** distributed via **Swift Package
 Manager (SPM)**. It connects **paid ads → App Store install → in-app conversions**
-using Decisa's first-party attribution ingest — the same public endpoints as
-`pixel.js` in the browser.
+using Decisa's first-party attribution ingest — authenticated with a stable
+public `app_key` whose pixel membership lives server-side in the dashboard.
 
 Ship a **native pixel** in your Swift or SwiftUI app: authenticate with your
-public `pixel_key` (`dcs_px_`), resolve deferred attribution on first launch,
+public `app_key` (`dcs_app_`), resolve deferred attribution on first launch,
 then send **conversion tracking** events to `/v1/identify` and `/v1/track`.
 Built for **web2app** and **funnel2app** flows where users click an ad or
 landing page, install from the App Store, and convert days later — without
@@ -46,18 +46,21 @@ in the app binary.
 
 ---
 
-## The public `pixel_key`, never a secret
+## The public `app_key`, never a secret
 
-The SDK authenticates **only** with your workspace's public `pixel_key` — the
-string that begins with `dcs_px_`. It is the same public credential `pixel.js`
-embeds in a public web page, and it is sent in the request body. It is **not a
-secret** and is safe to ship inside an IPA.
+The SDK authenticates **only** with your app's public `app_key` — the
+string that begins with `dcs_app_`. It is a public credential (same trust
+class as the web `pixel_key`) and is sent in the request body. It is **not a
+secret** and is safe to ship inside an IPA or APK.
+
+**Which pixels receive events is configured in the Decisa dashboard** — add or
+remove member pixels without rebuilding the app or waiting for store review.
 
 **Never put a secret key in a mobile app.** The server-side Decisa SDKs (Node,
 PHP, Python) authenticate with a secret `dcs_ak_` / `dcs_sk_` key. A mobile
 binary can be decompiled, so a secret in the binary can be extracted and used to
 forge conversions and poison your attribution. This SDK refuses anything that is
-not a `dcs_px_` key (an assertion fires in debug builds).
+not a `dcs_app_` key (an assertion fires in debug builds).
 
 ---
 
@@ -68,7 +71,7 @@ Dependencies**) using the repository URL, or in your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/decisa-ai/decisa-swift", from: "0.1.1"),
+    .package(url: "https://github.com/decisa-ai/decisa-swift", from: "0.2.0"),
 ],
 targets: [
     .target(
@@ -100,7 +103,7 @@ import DecisaSDK
 struct MyApp: App {
     init() {
         // Synchronous kickoff so paywall / first-screen events can await resolve.
-        Decisa.start(pixelKey: "dcs_px_your_public_key")
+        Decisa.start(appKey: "dcs_app_your_public_key")
     }
 
     var body: some Scene {
